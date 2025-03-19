@@ -1,0 +1,129 @@
+---
+title: "KNN Classification on the Iris Dataset"
+author: "Joshua Agbroko"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# **Introduction**
+The **Iris Dataset** is a classic dataset used in machine learning. In this
+project, we will use the **K_Nearest Neighbours(KNN)** algorithm to classsify iris species based on sepal and petal measurements.
+
+Key steps in this analysis:
+
+- Data Preprocessing & Normalization
+
+- Hyperparameter Tuning with Cross-Validation
+
+- Model Evaluation & Visualization
+
+- Summary of Findings
+
+# **Loading Libraries & Data**
+```{r Setup, message=FALSE, warning=FALSE}
+# loading necessary libraries
+library(tidyverse)   
+library(caret)
+library(kknn)
+library(knitr)
+
+# loading Iris dataset
+data(iris)
+head(iris) %>% kable()
+```
+
+# **Data Preprocessing**
+```{r Convert Target Variable to Factor}
+# ensuring Species is a factor
+iris$Species <- as.factor(iris$Species)
+```
+
+```{r Normalizing numerical features}
+# Min-max normalization
+normalize <- function(x){
+  (x - min(x)) / (max(x) - min(x))
+}
+
+iris_norm <- iris %>%
+  mutate(across(where(is.numeric), normalize))
+
+head(iris_norm) %>% kable()
+```
+
+# **Splitting Data into Training & Test Sets**
+I'll use 80% of the data for training and 20% for testing while preserving class
+imbalance.
+```{r Train-test split}
+set.seed(123)
+train_index <- createDataPartition(iris_norm$Species, p = 0.8, list = FALSE)
+
+train_data <- iris_norm[train_index, ]
+test_data <- iris_norm[-train_index, ]
+```
+
+# **Training KNN Model with Hyperparameter Tuning** 
+I'll use a 5-fold cross-validation to find the optimal number of neighbours(k)
+```{r}
+# Defining training control with cross-validation
+train_control <- trainControl(method = "cv", number = 5) 
+
+# Defining grid of k values(only odd to avoid ties)
+grid <- expand.grid(
+  kmax = seq(1, 15, by = 2),               # maximum neighbours
+  distance = 2,                 # euclidean distance
+  kernel = "optimal")           # Weighting function
+
+# Train model
+set.seed(123)
+knn_model <- train(
+  Species ~ .,
+  data = train_data,
+  method = "kknn",
+  tuneGrid = grid,
+  trControl = train_control
+)
+
+# Display best k value
+knn_model$bestTune %>% kable()
+```
+
+# **Model Performance**
+I evaluate the trained model using accuracy and a confusion matrix.
+```{r}
+# Predicitonon test data
+predictions <- predict(knn_model, test_data)
+
+# Generating the confusion matrix
+conf_matrix <- confusionMatrix(predictions, test_data$Species)
+
+# Print
+conf_matrix
+```
+
+# **Visualizing KNN Accuracy** 
+Plotting accuracy scores for different values of k from cross-validation
+```{r}
+ggplot(knn_model) +
+  labs(title = "KNN Accuracy vs. k Value", x = "k Value", y = "Accuracy")
+```
+
+# **Conclusion**
+
+## Findings
+- The best 'k' value for our model, determined via cross-validation, was 
+`r knn_model$bestTune`.
+- The model achieved an overall accuracy of 
+`r round(conf_matrix$overall["Accuracy"], 3) * 100`%
+on the test dataset.
+- The confusion matrix showed that **most misclassification occurred between 
+similar species**, particularly in cases where feature differences were minimal. 
+
+
+## Final Thoughts
+KNN proved to be strong classifier for the **Iris dataset**, achieving high 
+accuracy with minimal tuning. However further improvements, such as using a 
+different feature transformation or more advanced hyperparameter tuning, could 
+enhance performance further. 
